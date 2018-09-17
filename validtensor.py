@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn import metrics
 import tensorflow as tf
+from tensorflow.python.data import Dataset
 tf.logging.set_verbosity(tf.logging.ERROR)
 pd.options.display.max_rows = 10
 pd.options.display.float_format = '{:.1f}'.format
@@ -51,18 +52,107 @@ print(validation_examples)
 validation_targets = preprocess_targets(california_housing_dataframe.tail(5000))
 print(validation_targets)
 
-plt.figure(figsize=(13,8))
-ax = plt.subplot(1, 2, 1)
-ax.set_title('validation data')
+# plt.figure(figsize=(13,8))
+# ax = plt.subplot(1, 2, 1)
+# ax.set_title('validation data')
+#
+# ax.set_autoscaley_on(False)
+# ax.set_ylim([32, 43])
+# ax.set_autoscalex_on(False)
+# ax.set_xlim([-126, -112])
+# plt.scatter(training_examples['longitude'],
+#     training_examples['latitude'],
+#     cmap='coolwarm',
+#     c=training_targets['median_house_value'] / training_targets['median_house_value'].max())
+# _ = plt.plot()
+# #plt.show()
+#linear regression training function
+def my_input_fn(features, targets, batch_size=1, shuffle=True, num_epochs=None):
+    #convert pandas data to np array
+    features = {key:np.array(value) for key,value in dict(features).items()}
+    ds = Dataset.from_tensor_slices((features,targets))
+    ds = ds.batch(batch_size).repeat(num_epochs)
+    #shuffle if specified
+    if shuffle:
+        ds = ds.shuffle(1000)
+    features, labels = ds.make_one_shot_iterator().get_next()
+    return features, labels
 
-ax.set_autoscaley_on(False)
-ax.set_ylim([32, 43])
-ax.set_autoscalex_on(False)
-ax.set_xlim([-126, -112])
-plt.scatter(training_examples['longitude'],
-    training_examples['latitude'],
-    cmap='coolwarm',
-    c=training_targets['median_house_value'] / training_targets['median_house_value'].max())
+def construct_features_columns(input_features):
+    return set([tf.feature_column.numeric_column(my_feature)
+                for my_feature in input_features])
 
-_ = plt.plot()
-plt.show()
+def train_model(
+    learning_rate,
+    steps,
+    batch_size,
+    training_examples,
+    training_targets,
+    validation_examples,
+    validation_targets):
+    periods = 10
+    steps_per_period = steps/periods
+    #creating linear regressor object and optimizer
+    my_optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+    my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, 5.0)
+    linear_regressor = tf.estimator.LinearRegressor(
+        feature_columns = construct_features_columns(training_examples),
+        optimizer = my_optimizer)
+    #input functions
+    training_input_fn = lambda: my_input_fn(
+        training_examples,
+        training_targets['median_house_value'],
+        batch_size=batch_size)
+    predict_training_input_fn = lambda: my_input_fn(
+        training_examples,
+        training_targets['median_house_value'],
+        num_epochs=1,
+        shuffle=False)
+    predict_validation_input_fn = lambda: my_input_fn(
+        validation_examples,
+        validation_targets['median_house_value'],
+        num_epochs=1,
+        shuffle=False)
+    #train the model and check loss
+    print('training model')
+    training_rmse = []
+    validation_rmse = []
+    for period in range(0, periods):
+        linear_regressor.train(
+            input_fn=training_input_fn,
+            steps=steps_per_period)
+        training_predictions = linear_regressor.predict(input_fn=predict_training_input_fn)
+        training_predictions = np.array([item['predictions'][0] for item in training_predictions])
+        validation_predictions = linear_regressor.predict(input_fn=predict_validation_input_fn)
+        validation_predictions = np.array([item['predictions'][0] for item in validation_predictions])
+
+        training_rmse_def = math.sqrt(
+            metrics.mean_squared_error(training_predictions, training_targets))
+        validation_rmse_def = math.sqrt(
+            metrics.mean_squared_error(validation_predictions, validation_targets))
+
+        print('period %02d : %0.2f' % (period, training_rmse_def))
+
+        training_rmse.append(training_rmse_def)
+        validation_rmse.append(validation_rmse_def)
+
+    print('training finished', training_rmse, validation_rmse)
+
+    plt.ylabel("RMSE")
+    plt.xlabel("Periods")
+    plt.title("Root Mean Squared Error vs. Periods")
+    plt.tight_layout()
+    plt.plot(training_rmse, label="training")
+    plt.plot(validation_rmse, label="validation")
+    plt.legend()
+    plt.show()
+    return linear_regressor
+
+linear_regressor = train_model(
+    learning_rate=0.0003,
+    steps=500,
+    batch_size=1,
+    training_examples=training_examples,
+    training_targets=training_targets,
+    validation_examples=validation_examples,
+    validation_targets=validation_targets)
