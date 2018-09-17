@@ -15,6 +15,7 @@ from tensorflow.python.data import Dataset
 tf.logging.set_verbosity(tf.logging.ERROR)
 pd.options.display.max_rows = 10
 pd.options.display.float_format = '{:.1f}'.format
+
 #define dataframe
 california_housing_dataframe = pd.read_csv("https://download.mlcc.google.com/mledu-datasets/california_housing_train.csv", sep=",")
 
@@ -22,16 +23,20 @@ california_housing_dataframe = california_housing_dataframe.reindex(
     np.random.permutation(california_housing_dataframe.index))
 california_housing_dataframe['median_house_value'] /= 1000.0
 california_housing_dataframe
+
 #print the thing
 california_housing_dataframe.describe()
 print(california_housing_dataframe)
+
 #start and configure the feature
 my_feature = california_housing_dataframe[['total_rooms']]
 feature_columns = [tf.feature_column.numeric_column("total_rooms")]
+
 #define label
 targets = california_housing_dataframe['median_house_value']
+
 #set gradient descent, linear regressor
-my_optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.000001)
+my_optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.0001)
 my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, 5.0)
 
 linear_regressor = tf.estimator.LinearRegressor(
@@ -49,21 +54,27 @@ def my_input_fn(features, targets, batch_size=1, shuffle=True, num_epochs=None):
 
     features, labels = ds.make_one_shot_iterator().get_next()
     return features, labels
+
 #train the model
 _ = linear_regressor.train(
     input_fn = lambda:my_input_fn(my_feature, targets),
     steps=100
 )
+
 #input function for predictions
 prediction_input_fn = lambda: my_input_fn(my_feature, targets, num_epochs=1, shuffle=False)
+
 #call precit
 predictions = linear_regressor.predict(input_fn=prediction_input_fn)
+
 #format predictions to numpy array
 predictions = np.array([item['predictions'][0] for item in predictions])
+
 #mean squared error
 mean_squared_error = metrics.mean_squared_error(predictions, targets)
 root_mean_squared_error = math.sqrt(mean_squared_error)
 print('MSE: %.3f' % mean_squared_error)
+
 #compare rmse to median value
 min_house_value = california_housing_dataframe['median_house_value'].min()
 max_house_value = california_housing_dataframe['median_house_value'].max()
@@ -73,12 +84,13 @@ print('min value %.3f'%min_house_value)
 print('max value %.3f'%max_house_value)
 print('min max dif value %.3f'%min_max_difference)
 print('ROOT MSE %.3f'%root_mean_squared_error)
+
 #calibration to reduce model error
 calibration_data = pd.DataFrame()
 california_housing_dataframe['predictions'] = pd.Series(predictions)
 calibration_data['targets'] = pd.Series(targets)
 
-sample = california_housing_dataframe.sample(n=300)
+sample = california_housing_dataframe.sample(n=170)
 print(sample)
 
 x_0 = sample['total_rooms'].min()
