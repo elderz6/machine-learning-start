@@ -169,6 +169,10 @@ def train_linear_classifier_model(
         training_log_losses.append(training_log_loss)
         validation_log_losses.append(validation_log_loss)
 
+    evaluation_metrics = linear_classifier.evaluate(input_fn=predict_validation_input_fn)
+    print('auc validation %0.2f' %evaluation_metrics['auc'])
+    print('accuracy validation %0.2f' %evaluation_metrics['accuracy'])
+
     plt.ylabel('LogLoss')
     plt.xlabel('periods')
     plt.title('LogLoss x periods')
@@ -180,9 +184,9 @@ def train_linear_classifier_model(
     return linear_classifier
 
 linear_classifier = train_linear_classifier_model(
-        learning_rate=0.00001,
-        steps=200,
-        batch_size=20,
+        learning_rate=0.00005,
+        steps=20000,
+        batch_size=500,
         training_examples=training_examples,
         training_targets=training_targets,
         validation_examples=validation_examples,
