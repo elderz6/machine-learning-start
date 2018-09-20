@@ -78,25 +78,40 @@ def my_input_fn(features, targets, batch_size=1, shuffle=True, num_epochs=None):
     features, labels = ds.make_one_shot_iterator().get_next()
     return features, labels
 
-def construct_features_columns(input_features):
-    return set([tf.feature_column.numeric_column(my_feature)
-                for my_feature in input_features])
+def construct_features_columns():
+    households = tf.feature_column.numeric_column('households')
+    longitude = tf.feature_column.numeric_column('longitude')
+    latitude = tf.feature_column.numeric_column('latitude')
+    housing_median_age = tf.feature_column.numeric_column('housing_median_age')
+    median_income = tf.feature_column.numeric_column('median_income')
+    rooms_per_person = tf.feature_column.numeric_column('rooms_per_person')
+
+    bucketized_households = tf.feature_column.bucketized_column(households,
+        boundaries=get_quantile_based_boundaries(california_housing_dataframe['households'], 7))
+    bucketized_longitude = tf.feature_column.bucketized_column(longitude,
+        boundaries=get_quantile_based_boundaries(california_housing_dataframe['longitude'], 10))
+
+    feature_columns = set([bucketized_longitude, bucketized_households])
+    return feature_columns
+    # return set([tf.feature_column.numeric_column(my_feature)
+    #             for my_feature in input_features])
 
 def train_model(
     learning_rate,
     steps,
     batch_size,
+    feature_columns,
     training_examples,
     training_targets,
     validation_examples,
     validation_targets):
-    periods = 10
+    periods = 20
     steps_per_period = steps/periods
     #creating linear regressor object and optimizer
     my_optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
     my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, 5.0)
     linear_regressor = tf.estimator.LinearRegressor(
-        feature_columns = construct_features_columns(training_examples),
+        feature_columns = construct_features_columns(),
         optimizer = my_optimizer)
     #input functions
     training_input_fn = lambda: my_input_fn(
@@ -148,10 +163,16 @@ def train_model(
     plt.show()
     return linear_regressor
 
+def get_quantile_based_boundaries(feature_values, num_buckets):
+    boundaries = np.arange(1.0, num_buckets) / num_buckets
+    quantiles = feature_values.quantile(boundaries)
+    return [quantiles[q] for q in quantiles.keys()]
+
 linear_regressor = train_model(
-    learning_rate=0.0003,
+    learning_rate=1,
     steps=500,
     batch_size=1,
+    feature_columns=construct_features_columns(),
     training_examples=training_examples,
     training_targets=training_targets,
     validation_examples=validation_examples,
