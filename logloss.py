@@ -66,6 +66,20 @@ def my_input_fn(features, targets, batch_size=1, shuffle=True, num_epochs=None):
     features, labels = ds.make_one_shot_iterator().get_next()
     return features, labels
 
+def model_size(estimator):
+    variables = estimator.get_variable_names()
+    size=0
+    for variable in variables:
+        if not any(x in variable
+                    for x in ['global_step',
+                              'centered_bias_weight',
+                              'bias_weight',
+                              'Ftrl']):
+            size+=np.count_nonzero(estimator.get_variable_value(variable))
+        return size
+
+
+
 def train_linear_regressor_model(
     learning_rate,
     steps,
@@ -74,7 +88,6 @@ def train_linear_regressor_model(
     training_targets,
     validation_examples,
     validation_targets):
-
     periods = 10
     steps_per_period = steps/periods
     my_optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
@@ -126,6 +139,7 @@ def train_linear_regressor_model(
 
 def train_linear_classifier_model(
     learning_rate,
+    regularization_strength,
     steps,
     batch_size,
     training_examples,
@@ -135,7 +149,7 @@ def train_linear_classifier_model(
     periods = 10
     steps_per_period = steps/ periods
 
-    my_optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+    my_optimizer = tf.train.FtrlOptimizer(learning_rate=learning_rate, l1_regularization_strength=regularization_strength)
     my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, 5.0)
     linear_classifier = tf.estimator.LinearClassifier(
         feature_columns=construct_features_columns(training_examples),
@@ -185,9 +199,11 @@ def train_linear_classifier_model(
 
 linear_classifier = train_linear_classifier_model(
         learning_rate=0.00005,
-        steps=20000,
-        batch_size=500,
+        regularization_strength=0.1,
+        steps=300,
+        batch_size=100,
         training_examples=training_examples,
         training_targets=training_targets,
         validation_examples=validation_examples,
         validation_targets=validation_targets)
+print('model size', model_size(linear_classifier))
