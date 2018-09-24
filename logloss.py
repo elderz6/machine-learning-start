@@ -149,7 +149,8 @@ def train_linear_classifier_model(
     periods = 10
     steps_per_period = steps/ periods
 
-    my_optimizer = tf.train.FtrlOptimizer(learning_rate=learning_rate, l1_regularization_strength=regularization_strength)
+    my_optimizer = tf.train.FtrlOptimizer(learning_rate=learning_rate,
+    l1_regularization_strength=regularization_strength)
     my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, 5.0)
     linear_classifier = tf.estimator.LinearClassifier(
         feature_columns=construct_features_columns(training_examples),
